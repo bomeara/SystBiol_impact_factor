@@ -1,0 +1,76 @@
+---
+title: "SystBiol Impact"
+author: "Brian O'Meara"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, fig.width=20, fig.height=10}
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+wos <- read.csv("wos.csv")
+min_year <- 2+min(wos$Publication.Year)
+max_year <- -1+max(wos$Publication.Year)
+impact_raw <- data.frame()
+for (focal_year in min_year:max_year) {
+    wos_focal2 <- subset(wos, Publication.Year==(focal_year-2))
+     wos_focal1 <- subset(wos, Publication.Year==(focal_year-1))
+     wos_focal <- rbind(wos_focal1, wos_focal2)
+    wos_focal$IF.Year <- focal_year
+    wos_focal$Citations <- wos_focal[,paste0("X", focal_year)]
+    impact_raw <- rbind(impact_raw, wos_focal)
+}
+
+aggregate_by_year <- impact_raw |> group_by(IF.Year) |> summarize(total_pubs = n(), total_citations=sum(Citations))
+
+aggregate_by_year$ImpactFactor <- aggregate_by_year$total_citations / aggregate_by_year$total_pubs
+
+impact_raw <-impact_raw |> arrange(Citations, IF.Year) 
+most_impactful_titles <- unique(tail(impact_raw$Title, 10))
+impact_raw$ImpactfulTitle <- impact_raw$Title
+for (i in sequence(nrow(impact_raw))) {
+    if(!(impact_raw$Title[i] %in% most_impactful_titles)) {
+        impact_raw$ImpactfulTitle[i] <- "Other papers"   
+    } else {
+         impact_raw$ImpactfulTitle[i] <- paste0(" ", impact_raw$ImpactfulTitle[i])
+    }
+}
+
+
+
+g <- ggplot(impact_raw, aes(x=IF.Year, y=Citations, fill=as.factor(ImpactfulTitle)))  +  geom_bar(position="stack", stat="identity") + guides(fill = guide_legend(label.wrap = 20)) #+   guides(fill = 'none')
+print(g)
+
+
+```
+
+```{r, fig.width=5, fig.height=5}
+
+
+aggregate_by_year_focal_years <- subset(aggregate_by_year, IF.Year>=min_year)
+
+g <- ggplot(aggregate_by_year_focal_years, aes(x=IF.Year, y=ImpactFactor)) + geom_bar(stat="identity")
+print(g)
+
+g <- ggplot(aggregate_by_year_focal_years, aes(x=IF.Year, y=total_pubs)) + geom_bar(stat="identity")
+print(g)
+
+aggregate_individual_years <- wos |> group_by(Publication.Year) |> summarize(pubs_this_year=n()) |> filter(Publication.Year >= min_year) |> filter(Publication.Year <= max_year)
+
+g <- ggplot(aggregate_individual_years, aes(x=Publication.Year, y=pubs_this_year)) + geom_bar(stat="identity")
+print(g)
+```
+
+```{r, fig.width=7, fig.height=5}
+
+
+#g <- ggplot(aggregate_by_year_focal_years, aes(x=total_pubs, y=total_citations, size=ImpactFactor, colour=IF.Year)) + geom_point() +   geom_text_repel(aes(label = IF.Year, size=10, colour="black")) + labs(x="Publications in window", y="Total citations in this year")
+
+g <- ggplot(aggregate_by_year_focal_years, aes(x=total_pubs, y=total_citations, size=ImpactFactor)) + geom_point() + geom_text_repel(aes(label = IF.Year, size=10)) + labs(x="Publications in window", y="Total citations in this year")
+print(g)
+```
