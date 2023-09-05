@@ -6,10 +6,10 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE)
 ```
 
-```{r, fig.width=20, fig.height=10}
+```{r, fig.width=10, fig.height=6}
 library(tidyverse)
 library(ggplot2)
 library(ggrepel)
@@ -31,7 +31,7 @@ aggregate_by_year <- impact_raw |> group_by(IF.Year) |> summarize(total_pubs = n
 aggregate_by_year$ImpactFactor <- aggregate_by_year$total_citations / aggregate_by_year$total_pubs
 
 impact_raw <-impact_raw |> arrange(Citations, IF.Year) 
-most_impactful_titles <- unique(tail(impact_raw$Title, 10))
+most_impactful_titles <- unique(tail(impact_raw$Title, 6))
 impact_raw$ImpactfulTitle <- impact_raw$Title
 for (i in sequence(nrow(impact_raw))) {
     if(!(impact_raw$Title[i] %in% most_impactful_titles)) {
@@ -42,8 +42,12 @@ for (i in sequence(nrow(impact_raw))) {
 }
 
 
+impact_raw$ImpactfulTitle <- as.factor(impact_raw$ImpactfulTitle)
+impact_raw$ImpactfulTitle <- reorder(impact_raw$ImpactfulTitle, impact_raw$ImpactfulTitle)
 
-g <- ggplot(impact_raw, aes(x=IF.Year, y=Citations, fill=as.factor(ImpactfulTitle)))  +  geom_bar(position="stack", stat="identity") + guides(fill = guide_legend(label.wrap = 20)) #+   guides(fill = 'none')
+
+manual_colors <- c(viridis::viridis(-1+length(unique(impact_raw$ImpactfulTitle))), "darkgray")
+g <- ggplot(impact_raw, aes(x=IF.Year, y=Citations, fill=ImpactfulTitle))  +  geom_bar(position="stack", stat="identity") + labs(fill="Paper title") +   scale_fill_manual(values = manual_colors, labels = function(x) str_wrap(x, width = 80)) #+   guides(fill = 'none')
 print(g)
 
 
@@ -73,4 +77,24 @@ print(g)
 
 g <- ggplot(aggregate_by_year_focal_years, aes(x=total_pubs, y=total_citations, size=ImpactFactor)) + geom_point() + geom_text_repel(aes(label = IF.Year, size=10)) + labs(x="Publications in window", y="Total citations in this year")
 print(g)
+
+knitr::kable(aggregate_by_year_focal_years)
+
+knitr::kable(aggregate_individual_years)
+```
+
+```{r, fig.width=7, fig.height=5}
+decay_df <- data.frame()
+for (IF.Year_focal in unique(impact_raw$IF.Year)) {
+	if_subset <- subset(impact_raw, IF.Year==IF.Year_focal)
+	if_subset <- if_subset[order(if_subset$Citations, decreasing=FALSE),]
+	if_subset$Citations_sum <- cumsum(if_subset$Citations)
+	if_subset$Papers_total <- (sequence(nrow(if_subset)))
+	if_subset$ImpactFactor <- if_subset$Citations_sum / if_subset$Papers_total
+	decay_df <- rbind(decay_df, if_subset)
+}
+
+g <- ggplot(aggregate_by_year_focal_years, aes(x=total_pubs, y=total_citations, size=ImpactFactor, colour=IF.Year)) + scale_color_viridis_c(option = "turbo") + geom_point() + geom_text_repel(aes(label = IF.Year, size=10)) + labs(x="Publications in window", y="Total citations in this year") + geom_point(data=decay_df, aes(x=Papers_total, y=Citations_sum, group=IF.Year, size=1)) + xlim(100, NA) + geom_line(data=decay_df, aes(x=Papers_total, y=Citations_sum, group=IF.Year), size=0.5) + guides(fill = 'none', size='none', group='none', colour='none')
+print(g)
+
 ```
